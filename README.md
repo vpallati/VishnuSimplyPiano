@@ -30,6 +30,7 @@ Do not double-click the HTML file: ES modules and microphone access need a local
 - Synthesized note previews and demo playback at 30-240 BPM.
 - Loops over an inclusive range of numbered steps, including notes and rests.
 - A personal library with a note editor, YouTube reference links, and MIDI track import.
+- Local audio-file transcription into an editable, audible single-note draft, with MIDI export.
 - Switchable **Video lesson** and **Guided notes** modes for each song.
 - Opt-in YouTube playback, supported speed choices, and section loops defined in seconds.
 - Correct-note counts, pitch accuracy, full play-throughs, and active practice time.
@@ -47,10 +48,10 @@ It also includes [Aditya Lankoti's piano cover and tutorial](https://www.youtube
 
 To enable correct-note tracking for this song:
 
-1. Obtain a single-note MIDI melody you have permission to use, or prepare your own permitted arrangement.
-2. Open the reference and choose **Add an arrangement**.
-3. Import the MIDI and choose its melody track, or enter the notes.
-4. Save, listen to the demo, and start practicing.
+1. Open the song and choose **Guided notes**.
+2. Choose **Generate from audio** to analyze a local recording you have permission to process, or **Enter or import notes** for your own arrangement or a permitted MIDI.
+3. Review and correct the draft. Audio detection is especially error-prone for a complete vocal/instrumental mix.
+4. Choose **Use these notes**, then **Save song**, listen to the demo, and start practicing. Your original reference and tutorial links are preserved.
 
 A YouTube link contains neither a reliable note sequence nor fingering. Separating a full recording into instruments and making a suitable beginner arrangement is outside this version. The app does **not** promise that pasting a link will produce a guided note arrangement.
 
@@ -91,6 +92,27 @@ Standard MIDI format 0 and 1 files up to 2 MB are supported. PPQ timing is requi
 - This is an explicitly labeled **monophonic simplification**, not a guarantee that the chosen track is the song's melody.
 - Export a shorter section if a track exceeds the supported step/duration limits.
 
+### Generate a draft from an audio file
+
+Open **Add your song** or **Edit song**, then **Generate draft notes from audio**. A song without guided notes also offers **Generate from audio**.
+
+1. Choose a local MP3, WAV, or another format your browser can decode. Files must be non-empty, at most **40 MB**, and **0.5 seconds to 10 minutes** long.
+2. Listen to the original audio and select **0.5-60 seconds** using start/end times. Start with **5 seconds** of one clear instrument; processing may take several minutes on slower devices.
+3. Set the lesson tempo, **30-240 BPM**. Tempo is supplied by you, not automatically detected. Optionally limit detections to C3-C6.
+4. Choose **Generate draft notes**. The model loads from this same website and runs in a Web Worker. You can cancel processing or close the dialog without saving anything.
+5. **Hear draft**, compare it with the recording, and edit the note text. You can **Download MIDI** without adding a song, or choose **Use these notes** to fill the song editor.
+6. Review the song editor and choose **Save song**. Replacing existing editor notes asks for confirmation. Existing song links are retained, and changed saved arrangements follow the usual progress-reset confirmation.
+
+Important limitations:
+
+- This is experimental pitch transcription, **not a verified melody, source separation, or beginner arrangement**. Basic Pitch works best on one instrument at a time. Vocals, drums, chords, harmonics, sustain and background instruments may introduce wrong or missing notes.
+- Simultaneous detections are reduced to the **highest active pitch**, not necessarily the lead instrument. Low-confidence events and fragments shorter than 90 ms are filtered. The middle-register option filters pitches; it does not transpose them or separate instruments.
+- Leading silence is removed, internal rests retained, and timing converted to beats at the supplied tempo. Beat grids, meter, fingering, hands and rhythm grading are not inferred. MIDI export contains the edited single-note draft, not the original polyphony or dynamics.
+- Section/range/tempo changes affect the next analysis. They do not silently change an existing draft's tempo. A new analysis replaces the current draft.
+- Saved output is labeled **Audio transcription (draft)**. Guided practice checks against those notes, including any transcription errors, so correct the arrangement first.
+- The model and engine are downloaded on demand, not on initial app load. There is no offline cache guarantee. Raw files and decoded audio are never stored in localStorage or backups; closing the dialog releases them.
+- There is **no YouTube-to-MP3 downloader** and no recording is bundled. Only process files you are entitled to use.
+
 The notation is a pitch-oriented phrase preview, not a full engraved score: no inferred time signature or bar structure is added. Unusual imported durations are approximated visually; hovering a note shows its precise beat duration, and playback uses its duration. Extreme pitches are octave-shifted for display and labeled; piano keys and note names retain the actual octave. In practice, rests are skipped and duration is not graded.
 
 ## Microphone setup and limitations
@@ -120,6 +142,7 @@ Songs and progress live in `localStorage`, under the `cadence.piano.v1` key. The
 - Invalid existing storage is not silently overwritten.
 - No YouTube content or third-party script is fetched on initial page load or simply selecting video mode. Choosing **Load video lesson** loads the YouTube IFrame API and its privacy-enhanced (`youtube-nocookie.com`) player. YouTube/Google may then receive device data and use cookies; this is not an offline/private video service.
 - External reference links open YouTube in another tab. Neither video mode nor guided mode downloads or transcribes the recording.
+- Audio-file transcription never uploads the selected file. It requests only same-origin engine/model assets; optional YouTube playback is separate.
 - Cadence itself has no analytics, external fonts, paid APIs, or server-side storage. The optional third-party player has its own privacy practices.
 
 ## Deploy free on GitHub Pages
@@ -149,20 +172,31 @@ npm run build
 npm run preview
 ```
 
-- Browser-native JavaScript modules, with strict TypeScript/JSDoc checks.
-- Plain CSS and inline SVG; no runtime framework or dependencies.
-- Native Node tests cover note parsing, practice transitions, loops, pitch detection, MIDI parsing, validation, and persistence.
+- Browser-native JavaScript modules, with strict TypeScript/JSDoc checks for application code. `skipLibCheck` accommodates TensorFlow 3's legacy declaration conflicts with modern DOM types; application checking remains strict.
+- Plain CSS and inline SVG; no runtime UI framework. Optional transcription uses Basic Pitch 1.0.1 and TensorFlow.js 3.21.0.
+- Native Node tests cover note parsing, practice transitions, loops, pitch detection, MIDI parsing/export, audio draft reduction, cancellation, validation, and persistence.
 - Vite handles local serving and production asset bundling.
+- `predev` and `prebuild` run [scripts/prepare-model.js](scripts/prepare-model.js), copying the installed model and license notices into ignored `public/transcription/`. GitHub Actions recreates these assets from locked npm dependencies; no model downloads or API keys are needed at build time beyond dependency installation.
+- The transcription worker explicitly uses TensorFlow's CPU backend. TensorFlow 3's WASM padding kernel and WebGL worker timer path failed real-browser validation; neither is silently substituted. Processing stays off the main thread, with progress and a no-progress timeout.
 - [src/core.js](src/core.js): notes, pitch detection, note gating, and practice state.
-- [src/midi.js](src/midi.js): bounded Standard MIDI parsing and melody extraction.
+- [src/midi.js](src/midi.js): bounded Standard MIDI parsing, melody extraction, and format-0 export.
 - [src/audio.js](src/audio.js): browser audio and microphone lifecycle.
 - [src/video.js](src/video.js): opt-in YouTube player, playback lifecycle, and timed section loops.
+- [src/transcription.js](src/transcription.js): audio-section validation, downmixing, and detected-note reduction.
+- [src/transcription-worker.js](src/transcription-worker.js): local model inference.
+- [src/audio-import.js](src/audio-import.js): audio selection, draft review, preview, export, and cancellation.
 - [src/storage.js](src/storage.js): versioned storage and validated backups.
 - [src/main.js](src/main.js): interface and interaction.
 - [src/visuals.js](src/visuals.js): notation, keyboard, and icons.
 
-Before a release, also try permission denial, a disconnected microphone, a quiet real piano, repeated notes, demo cancellation, MIDI track selection, backup restoration, and a small phone viewport. Synthetic tests cannot reproduce every microphone or instrument.
+Before a release, also try permission denial, a disconnected microphone, a quiet real piano, repeated notes, demo cancellation, MIDI track selection, backup restoration, and a small phone viewport. For transcription, test real model inference on a known original melody, invalid/silent audio, cancellation, stacked-dialog Escape, draft preview/export, and saving into an existing song. Synthetic tests cannot reproduce every recording, microphone or instrument.
+
+### Dependency audit note
+
+The current locked dependencies report **four moderate npm audit findings from one transitive chain**: Basic Pitch -> TensorFlow.js -> argparse -> sprintf-js ([GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c)). npm reports no available fix. This is a development-install dependency of TensorFlow's command-line tooling: inspection of Vite/Rollup's actual worker module graph confirmed **neither argparse nor sprintf-js ships in the browser bundle**. Cadence does not invoke that CLI. The audit is not clean; monitor upstream rather than forcing an incompatible argparse major override.
 
 ## License
 
 [MIT](LICENSE). The source code and Cadence-original exercises are freely usable and modifiable. Third-party song titles and external references are not claims of ownership or licenses to their music. Only import material you have permission to use. Cadence is not affiliated with Simply Piano, its owners, or the linked artists.
+
+Basic Pitch and its pretrained model are Apache-2.0 licensed by Spotify. TensorFlow.js is Apache-2.0 licensed by Google and contributors. Additional bundled dependencies have their own licenses; see [third-party notices](public/THIRD_PARTY_NOTICES.txt) and the license files generated beside the model. Software/model licenses do not grant rights to recordings or compositions.

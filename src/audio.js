@@ -7,6 +7,7 @@ export class PianoAudio {
     /** @type {Set<OscillatorNode>} */
     this.voices = new Set();
     this.silentUntil = 0;
+    this.generation = 0;
   }
 
   async ready() {
@@ -17,7 +18,9 @@ export class PianoAudio {
 
   /** @param {number} midi @param {number} [duration] */
   async play(midi, duration = 0.7) {
+    const generation = this.generation;
     const ctx = await this.ready();
+    if (generation !== this.generation) return;
     const now = ctx.currentTime;
     const length = Math.max(0.12, Math.min(duration, 8));
     this.silentUntil = performance.now() + (length + 0.25) * 1000;
@@ -46,6 +49,7 @@ export class PianoAudio {
   }
 
   stop() {
+    this.generation++;
     for (const voice of this.voices) voice.stop();
     this.voices.clear();
   }

@@ -1,0 +1,25 @@
+Cadence optional audio transcription
+
+Basic Pitch and its pretrained model
+Copyright 2022 Spotify AB
+https://github.com/spotify/basic-pitch-ts
+Licensed under Apache License 2.0.
+
+TensorFlow.js
+Copyright Google LLC and TensorFlow.js contributors
+https://github.com/tensorflow/tfjs
+Licensed under Apache License 2.0.
+
+The Apache License 2.0 text is distributed at:
+transcription/BASIC-PITCH-LICENSE.txt
+
+Other bundled dependencies and their license notices:
+- @tonejs/midi (MIT): transcription/TONEJS-MIDI-LICENSE.txt
+- array-flatten (MIT): transcription/ARRAY-FLATTEN-LICENSE.txt
+- long (Apache-2.0, Daniel Wirtz and contributors):
+  transcription/LONG-LICENSE.txt
+- midi-file (MIT): transcription/MIDI-FILE-LICENSE.txt
+- seedrandom (MIT): license section of transcription/SEEDRANDOM-README.txt
+
+These dependencies provide local audio inference. Their software licenses
+do not grant rights to third-party recordings or compositions.

@@ -112,6 +112,30 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; letter-sp
 .video-status { font-size: 10px; line-height: 1.8; color: #698060; padding-top: 12px; margin: 0; }
 .arrangement-empty .reference-link { margin: 20px auto; }
 .arrangement-empty .arrangement-hint { font-size: 10px; margin-top: 24px; }
+.arrangement-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.audio-editor-button { margin-top: 18px; width: 100%; }
+.draft-warning { color: #916329; background: #fbf3df; border: 1px solid #efe1bd; border-radius: 7px; font-size: 11px; line-height: 1.8; padding: 12px; margin: 15px 0; }
+.audio-import-modal { width: min(660px, calc(100% - 32px)); }
+.audio-file-label { border: 1px dashed #9eb899; background: #f0f6ed; border-radius: 10px; padding: 22px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; cursor: pointer; color: #587650; }
+.audio-file-label strong { font-size: 14px; }
+.audio-file-label span { font-size: 11px; line-height: 1.7; }
+#audio-file { width: 100%; padding: 12px 0; font-size: 12px; color: #71836a; }
+#audio-source { width: 100%; margin: 15px 0 5px; }
+.audio-options { border: 0; margin: 15px 0 0; padding: 0; min-width: 0; }
+.audio-options:disabled { opacity: .5; }
+.audio-options > legend { margin: 0; }
+.audio-option-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.audio-option-grid .field-label { margin-top: 12px; font-size: 11px; }
+#audio-analyze { margin-top: 20px; }
+.audio-work { margin: 15px 0; }
+.audio-work progress { width: 100%; height: 8px; accent-color: var(--green); }
+.audio-work .muted { margin: 8px 0 0; font-size: 11px; }
+.audio-work .text-button { color: #987338; font-size: 11px; }
+#audio-result { border-top: 1px solid var(--border); padding-top: 20px; }
+#audio-result h3 { font-family: Georgia, serif; font-size: 24px; font-weight: 400; margin-bottom: 9px; }
+.audio-result-actions { display: flex; gap: 9px; flex-wrap: wrap; margin: 18px 0 10px; }
+.audio-result-actions .primary { margin-left: auto; }
+.audio-attribution { margin: 24px 0 0; font-size: 9px; line-height: 1.8; color: #84927b; }
 
 .practice-layout { display: grid; grid-template-columns: minmax(0, 1fr) 274px; gap: 25px; align-items: start; }
 .studio-column { min-width: 0; }
@@ -425,6 +449,10 @@ footer > span:last-child { display: flex; gap: 7px; align-items: center; }
   .backup-actions { flex-direction: row; gap: 20px; }
 }
 @media (max-width: 480px) {
+  .audio-option-grid { gap: 8px; }
+  .audio-option-grid .field-label { font-size: 9px; }
+  .audio-import-modal { padding: 20px; }
+  .audio-result-actions .primary { margin-left: 0; width: 100%; }
   .lesson-switch button { font-size: 11px; gap: 6px; padding: 11px 4px; }
   .lesson-switch button small { font-size: 8px; }
   .video-consent { padding: 22px 15px; }

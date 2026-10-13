@@ -5,6 +5,7 @@ import { melodyFromTrack, readMidi } from './midi.js';
 import { Microphone, PianoAudio } from './audio.js';
 import { COMPUTER_KEYS, escapeHtml as esc, icon, keyboard, score } from './visuals.js';
 import { defaultLessonMode, newVideoSession, VideoLesson, videoMarkup, videoUrl } from './video.js';
+import { AudioImport, audioImportMarkup } from './audio-import.js';
 
 /** @template {HTMLElement} T @param {string} selector @returns {T} */
 function $(selector) {
@@ -44,6 +45,7 @@ let micPending = false;
 let micRequest = 0;
 let manualUntil = 0;
 let editingId = '';
+let editingSource = 'Your arrangement';
 let search = '';
 let noticeTimer = 0;
 let pressedTimer = 0;
@@ -122,8 +124,10 @@ $('#app').innerHTML = `
       <div id="editor-error" class="form-error" role="alert" hidden></div>
       <label class="field-label" for="song-title">Song title</label><input id="song-title" name="title" maxlength="100" required placeholder="A song you've always wanted to play" />
       <div class="form-row"><div><label class="field-label" for="song-bpm">Playback tempo (BPM)</label><input id="song-bpm" name="bpm" type="number" min="30" max="240" value="72" required /></div><div class="import-field"><button type="button" class="button secondary" data-action="midi">${icon('cloud', 18)} Import MIDI</button><span class="field-hint">.mid or .midi, up to 2 MB</span></div></div>
+      <button type="button" class="button secondary audio-editor-button" data-action="audio-import">${icon('spark', 17)} Generate draft notes from audio</button>
       <div id="track-field" hidden><label class="field-label" for="midi-track">Choose the melody track</label><select id="midi-track"></select><p id="midi-info" class="field-hint"></p></div>
       <label class="field-label" for="song-notes">Piano notes <span class="optional">optional for references</span></label>
+      <p id="editor-draft-note" class="draft-warning" hidden>These notes were detected from audio and may be wrong. Listen, correct the draft, and save only when you want to practice these notes.</p>
       <textarea id="song-notes" rows="4" placeholder="C4 D4 E4 G4:2 E4 D4 C4:2" spellcheck="false" aria-describedby="notes-help"></textarea>
       <p id="notes-help" class="field-hint">Middle C is C4. Use F#4 or Bb3 for black keys, C4:2 for two beats, R:1 for a rest. Separate notes with spaces. Up to 512 steps.</p>
       <label class="field-label" for="song-reference">YouTube reference <span class="optional">optional</span></label><input id="song-reference" type="url" placeholder="https://www.youtube.com/watch?v=..." />
@@ -139,13 +143,30 @@ $('#app').innerHTML = `
     <div class="help-step"><span>03</span><div><h3>Small sections, as often as you like</h3><p>Listen to the demo, adjust its tempo, or loop a few steps. Practice is pitch-based, not a rhythm or fingering assessment. Rests play in the demo and are skipped in wait-for-note practice.</p></div></div>
     <div class="help-step"><span>04</span><div><h3>Make space for your songs</h3><p>Add a YouTube reference, enter notes, or import a MIDI file you can use. Choose its melody track; simultaneous chords become the highest note and overlapping notes are shortened. It is a practice simplification, not an automatic arrangement.</p></div></div>
     <div class="help-step"><span>05</span><div><h3>Choose how you learn</h3><p>Switch between Video lesson and Guided notes on the music stand. Load a video only when you want to connect to YouTube. Slow it down with the available speeds, mark the start and end in seconds, and enable a section loop. Video playback never listens to your microphone or earns pitch scores. Guided mode needs piano notes for the selected song.</p></div></div>
+    <div class="help-step"><span>06</span><div><h3>Start from an audio file</h3><p>In the song editor, choose Generate draft notes from audio. Select a short section of an audio file you are allowed to process. A local model detects pitches; you can hear and edit its draft, export MIDI, or use the notes in your song. Full mixes may produce accompaniment or overtones instead of the melody. Check the draft before using it as your lesson.</p></div></div>
     <div class="help-callout"><strong>A note about listening</strong><p>Microphone detection is experimental and monophonic, roughly A1-A6; middle-register notes work best. Background music, chords, headphones with processing, and sustain can confuse it. Use a quiet room and Chrome or Edge over HTTPS. All microphone processing stays on this device.</p><p>No piano nearby? Click the keys or use the letters shown below them. During demo playback, input and progress tracking pause.</p></div>
     <p class="muted">Progress is saved to this browser, not an account. Clearing site data removes it. Export a backup from My progress. This app isn't affiliated with Simply Piano or the linked artists.</p>
     <button class="button primary full-width" data-action="close-help">Let's make some music ${icon('arrow', 18)}</button>
   </dialog>
+  ${audioImportMarkup()}
   <input type="file" id="midi-file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden />
   <input type="file" id="backup-file" accept=".json,application/json" hidden />
 `;
+
+const audioImport = new AudioImport($('#audio-import'), (draft) => {
+  const notes = /** @type {HTMLTextAreaElement} */ ($('#song-notes'));
+  if (notes.value.trim() && !confirm('Replace the notes currently in the editor with this audio draft? The saved song will not change until you save.')) return false;
+  notes.value = formatNotes(draft.notes);
+  /** @type {HTMLInputElement} */ ($('#song-bpm')).value = String(draft.bpm);
+  const title = /** @type {HTMLInputElement} */ ($('#song-title'));
+  if (!title.value.trim()) title.value = draft.title;
+  editingSource = 'Audio transcription (draft)';
+  midiData = null;
+  $('#track-field').hidden = true;
+  $('#editor-draft-note').hidden = false;
+  $('#editor-error').hidden = true;
+  return true;
+});
 
 function render() {
   videoLesson?.destroy();
@@ -177,6 +198,7 @@ function renderPractice() {
         <section class="studio-card">
           <div class="studio-heading"><div class="song-heading-icon">${icon('music', 23)}</div><div class="song-heading-copy"><div class="eyebrow">ON THE MUSIC STAND</div><h2>${esc(song.title)}</h2><div class="song-meta">${hasNotes ? '<span class="badge mint">Guided notes ready</span><span>' + song.notes.filter((n) => n.midi !== null).length + ' notes</span>' : '<span class="badge amber">Guided notes need an arrangement</span>'}${videoUrl(song) ? '<span class="badge mint">Video linked</span>' : ''}<span>${esc(song.source)}</span></div></div><button class="icon-button" data-action="edit" aria-label="${isBuiltin() ? 'Make an editable copy' : 'Edit this song'}">${icon('edit', 18)}</button></div>
           <div class="lesson-switch" role="group" aria-label="Lesson mode"><button data-lesson-mode="video" aria-pressed="${lessonMode === 'video'}">${icon('play', 17)}<span>Video lesson<small>Watch, slow down, repeat</small></span></button><button data-lesson-mode="guided" aria-pressed="${lessonMode === 'guided'}">${icon('piano', 18)}<span>Guided notes<small>Wait for the correct note</small></span></button></div>
+          ${lessonMode === 'guided' && song.source === 'Audio transcription (draft)' ? '<p class="draft-warning">Audio-generated draft: these expected notes may be incorrect. Use Edit song to correct the arrangement after listening.</p>' : ''}
           ${lessonMode === 'video' ? videoMarkup(song) : hasNotes ? `
           <div class="score-toolbar"><span class="waiting-tag"><span></span> <span id="practice-mode">Wait-for-note mode</span></span><label class="toggle-label"><input id="show-labels" type="checkbox" ${labels ? 'checked' : ''} /> Note names</label></div>
           <div id="score-container" class="score-container"></div>
@@ -188,7 +210,7 @@ function renderPractice() {
           <div class="transport"><button class="button primary mic-button" data-action="mic" id="mic-button">${icon('mic', 18)} Enable microphone</button><button class="button secondary" data-action="demo" id="demo-button">${icon('play', 17)} Listen to demo</button><button class="icon-button restart-button" data-action="restart" aria-label="Restart this practice">${icon('restart', 19)}</button></div>
           <div class="input-status"><span class="input-dot" id="input-dot"></span><span id="input-label">Microphone off</span><span class="input-meter" id="input-meter"><i></i></span><span class="heard" id="heard">Audio stays on your device</span></div>
           ` : `
-          <div class="arrangement-empty"><div class="empty-icon">${icon('music', 42)}</div><span class="badge amber">GUIDED NOTES ARE NOT READY YET</span><h3>To wait for your notes,<br>we need the arrangement.</h3><p>The video does not supply a reliable note sequence. Import a MIDI melody or enter notes you have permission to use. We will never fill this song with a different melody.</p><button class="button primary" data-action="edit">${icon('plus', 18)} Add an arrangement</button>${videoUrl(song) ? `<button class="reference-link text-button" data-lesson-mode="video">Learn this song with the video ${icon('arrow', 16)}</button>` : ''}<p class="arrangement-hint">Once notes are added, you can switch between both modes for this same song.</p></div>
+          <div class="arrangement-empty"><div class="empty-icon">${icon('music', 42)}</div><span class="badge amber">GUIDED NOTES ARE NOT READY YET</span><h3>To wait for your notes,<br>we need the arrangement.</h3><p>Generate a draft from an audio file you are allowed to process, import a MIDI melody, or enter notes. Audio detection needs review; a video link alone does not supply reliable notes.</p><div class="arrangement-actions"><button class="button primary" data-action="audio-import">${icon('spark', 18)} Generate from audio</button><button class="button secondary" data-action="edit">${icon('plus', 18)} Enter or import notes</button></div>${videoUrl(song) ? `<button class="reference-link text-button" data-lesson-mode="video">Learn this song with the video ${icon('arrow', 16)}</button>` : ''}<p class="arrangement-hint">Once notes are added, you can switch between both modes for this same song.</p></div>
           `}
         </section>
         ${hasNotes && lessonMode === 'guided' ? `<section class="practice-settings"><div class="tempo-setting"><div class="setting-title">${icon('clock', 18)}<label for="tempo">Playback tempo</label><strong id="tempo-value">${tempo} <small>BPM</small></strong></div><div class="range-row"><span>Slower</span><input id="tempo" type="range" min="30" max="240" value="${tempo}" /><span>Faster</span></div><p>Demo speed changes. Practice always waits for you.</p></div><div class="loop-setting"><div class="setting-title">${icon('loop', 19)}<label for="loop-enabled">Loop a section</label><input id="loop-enabled" type="checkbox" ${practice.loop ? 'checked' : ''} /></div><div class="loop-fields"><label for="loop-start">From step</label><input id="loop-start" type="number" min="1" max="${song.notes.length}" value="${practice.start + 1}" /><span>to</span><input id="loop-end" aria-label="Loop end step" type="number" min="1" max="${song.notes.length}" value="${practice.end + 1}" /></div><p>Repeat the tricky parts. There's no rush.</p><p class="form-error" id="loop-error" role="alert" hidden></p></div></section>` : ''}
@@ -403,6 +425,7 @@ function stopDemo() {
   demoIndex = -1;
 }
 function stopAll() {
+  audioImport.pause();
   videoLesson?.unload();
   stopDemo();
   micRequest++;
@@ -469,6 +492,8 @@ function openEditor(item) {
   renderStage();
   const built = item && BUILTIN_SONGS.some((s) => s.id === item.id);
   editingId = item && !built ? item.id : '';
+  editingSource = item?.source === 'Audio transcription (draft)' ? item.source : 'Your arrangement';
+  $('#editor-draft-note').hidden = editingSource !== 'Audio transcription (draft)';
   midiData = null;
   $('#track-field').hidden = true;
   $('#editor-error').hidden = true;
@@ -494,6 +519,8 @@ function fillTrack() {
   const index = Number(/** @type {HTMLSelectElement} */ ($('#midi-track')).value);
   try {
     const result = melodyFromTrack(midiData.tracks[index], midiData.division);
+    editingSource = 'Your arrangement';
+    $('#editor-draft-note').hidden = true;
     /** @type {HTMLTextAreaElement} */ ($('#song-notes')).value = formatNotes(result.notes);
     $('#editor-error').hidden = true;
     $('#midi-info').textContent = `${result.notes.length} steps. ${result.simplified ? 'Simplified: highest note of simultaneous chords; overlapping notes shortened.' : 'Single-note melody imported.'} Leading silence is removed. Demo uses one adjustable tempo; pedal and tempo changes are not imported.`;
@@ -518,7 +545,7 @@ $('#song-form').addEventListener('submit', (event) => {
       description: previous?.description ?? (notes.length ? 'Your own little piece of music. Learn it one note at a time.' : 'Saved inspiration. Add a piano arrangement when you are ready.'),
       reference: /** @type {HTMLInputElement} */ ($('#song-reference')).value,
       tutorial: /** @type {HTMLInputElement} */ ($('#song-tutorial')).value,
-      source: notes.length ? 'Your arrangement' : 'Your reference'
+      source: notes.length ? editingSource : 'Your reference'
     });
     if (!notes.length && !videoUrl(item)) throw new Error('Add some piano notes, a piano tutorial, or a YouTube reference to save this song.');
     if (previous && JSON.stringify(previous.notes) !== JSON.stringify(item.notes) && data.progress[previous.id]) {
@@ -587,6 +614,15 @@ document.addEventListener('click', (event) => {
   const action = target.dataset.action;
   if (action === 'add') openEditor();
   else if (action === 'edit') openEditor(song);
+  else if (action === 'audio-import') {
+    if (!(/** @type {HTMLDialogElement} */ ($('#editor'))).open) openEditor(song);
+    const bpm = Number(/** @type {HTMLInputElement} */ ($('#song-bpm')).value);
+    if (!Number.isFinite(bpm) || bpm < 30 || bpm > 240) {
+      editorError('Set a tempo between 30 and 240 BPM before opening audio transcription.');
+      return;
+    }
+    audioImport.open(bpm);
+  }
   else if (action === 'close-editor') /** @type {HTMLDialogElement} */ ($('#editor')).close();
   else if (action === 'help') { stopAll(); updateInput(); renderStage(); /** @type {HTMLDialogElement} */ ($('#help')).showModal(); }
   else if (action === 'close-help') /** @type {HTMLDialogElement} */ ($('#help')).close();
@@ -639,7 +675,8 @@ document.addEventListener('change', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    const dialog = document.querySelector('dialog[open]');
+    const dialogs = document.querySelectorAll('dialog[open]');
+    const dialog = dialogs.item(dialogs.length - 1);
     if (dialog instanceof HTMLDialogElement) {
       event.preventDefault();
       dialog.close();
@@ -656,7 +693,7 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { stopAll(); persist(); renderStage(); updateInput(); }
 });
-window.addEventListener('pagehide', () => { stopAll(); persist(); });
+window.addEventListener('pagehide', () => { stopAll(); audioImport.cancel(); audioImport.close(); persist(); });
 window.setInterval(() => {
   if (view !== 'practice' || lessonMode !== 'guided' || demo || practice.finished || document.hidden || document.querySelector('dialog[open]')) return;
   if (!mic.running && performance.now() > manualUntil) return;

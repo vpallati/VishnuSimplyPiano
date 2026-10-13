@@ -1,4 +1,4 @@
-import { MAX_STEPS } from './core.js';
+import { MAX_STEPS, validateSong } from './core.js';
 
 /** @typedef {{ tick: number, end: number, midi: number }} MidiNote */
 /** @typedef {{ name: string, notes: MidiNote[] }} MidiTrack */
@@ -134,4 +134,36 @@ export function melodyFromTrack(track, division) {
   }
   if (steps.length > MAX_STEPS) throw new Error(`This track has ${steps.length} steps. Export a section of ${MAX_STEPS} or fewer.`);
   return { notes: steps, simplified };
+}
+
+/** @param {import('./core.js').Step[]} notes @param {number} bpm */
+export function writeMidi(notes, bpm) {
+  validateSong({ id: 'export', title: 'Piano draft', notes, bpm, reference: '', description: '', source: 'Cadence' });
+  if (!notes.length) throw new Error('Add at least one note before exporting MIDI.');
+  /** @param {number} value */
+  const variable = (value) => {
+    const bytes = [value & 127];
+    while ((value = Math.floor(value / 128)) > 0) bytes.unshift((value & 127) | 128);
+    return bytes;
+  };
+  const division = 480;
+  const tempo = Math.round(60_000_000 / bpm);
+  const track = [0, 0xff, 0x51, 3, tempo >> 16 & 255, tempo >> 8 & 255, tempo & 255, 0, 0xc0, 0];
+  let beats = 0;
+  let lastTick = 0;
+  for (const note of notes) {
+    const start = Math.round(beats * division);
+    beats += note.beats;
+    const end = Math.round(beats * division);
+    if (note.midi === null) continue;
+    track.push(...variable(start - lastTick), 0x90, note.midi, 88);
+    track.push(...variable(end - start), 0x80, note.midi, 0);
+    lastTick = end;
+  }
+  track.push(...variable(Math.round(beats * division) - lastTick), 0xff, 0x2f, 0);
+  return Uint8Array.from([
+    77, 84, 104, 100, 0, 0, 0, 6, 0, 0, 0, 1, division >> 8, division & 255,
+    77, 84, 114, 107, track.length >>> 24, track.length >>> 16 & 255, track.length >>> 8 & 255, track.length & 255,
+    ...track
+  ]);
 }
