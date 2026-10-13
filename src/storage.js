@@ -15,6 +15,14 @@ export function validateData(value) {
   const data = /** @type {Record<string, unknown>} */ (value);
   if (data.version !== 1 || !Array.isArray(data.songs) || data.songs.length > 100) throw new Error('Unsupported backup format or too many songs (maximum 100).');
   const songs = data.songs.map(validateSong);
+  for (const song of songs) {
+    if (song.id === EXAMPLE_REFERENCE.id && song.reference === EXAMPLE_REFERENCE.reference && song.tutorial === undefined) {
+      song.tutorial = EXAMPLE_REFERENCE.tutorial;
+      if (song.description === 'Your inspiration, by Sadhguru and Sounds of Isha. Add a MIDI arrangement or enter notes to start practicing.') {
+        song.description = EXAMPLE_REFERENCE.description;
+      }
+    }
+  }
   const ids = new Set(BUILTIN_SONGS.map((s) => s.id));
   for (const song of songs) {
     if (ids.has(song.id) || ['__proto__', 'constructor', 'prototype'].includes(song.id)) throw new Error('The backup contains duplicate or reserved song IDs.');

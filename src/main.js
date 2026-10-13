@@ -4,6 +4,7 @@ import { freshData, loadData, saveData, validateData } from './storage.js';
 import { melodyFromTrack, readMidi } from './midi.js';
 import { Microphone, PianoAudio } from './audio.js';
 import { COMPUTER_KEYS, escapeHtml as esc, icon, keyboard, score } from './visuals.js';
+import { defaultLessonMode, newVideoSession, VideoLesson, videoMarkup, videoUrl } from './video.js';
 
 /** @template {HTMLElement} T @param {string} selector @returns {T} */
 function $(selector) {
@@ -22,6 +23,11 @@ catch (error) {
 }
 let view = 'practice';
 let song = findSong(data.selected);
+let lessonMode = defaultLessonMode(song);
+/** @type {VideoLesson | null} */
+let videoLesson = null;
+/** @type {Map<string, import('./video.js').VideoSession>} */
+const videoSessions = new Map();
 let practice = new Practice(song.notes);
 let tempo = song.bpm;
 let labels = true;
@@ -121,7 +127,8 @@ $('#app').innerHTML = `
       <textarea id="song-notes" rows="4" placeholder="C4 D4 E4 G4:2 E4 D4 C4:2" spellcheck="false" aria-describedby="notes-help"></textarea>
       <p id="notes-help" class="field-hint">Middle C is C4. Use F#4 or Bb3 for black keys, C4:2 for two beats, R:1 for a rest. Separate notes with spaces. Up to 512 steps.</p>
       <label class="field-label" for="song-reference">YouTube reference <span class="optional">optional</span></label><input id="song-reference" type="url" placeholder="https://www.youtube.com/watch?v=..." />
-      <div class="editor-note">${icon('link', 18)}<span>A link saves your inspiration, not piano notes. Automatic YouTube transcription isn't included. Only import arrangements you have permission to use.</span></div>
+      <label class="field-label" for="song-tutorial">Piano tutorial video <span class="optional">optional</span></label><input id="song-tutorial" type="url" placeholder="https://www.youtube.com/watch?v=..." />
+      <div class="editor-note">${icon('link', 18)}<span>Video mode uses your tutorial, or the reference if no tutorial is added. Guided notes still need an arrangement. Videos aren't automatically transcribed. Only import arrangements you have permission to use.</span></div>
       <div class="modal-actions"><button type="button" class="text-button" data-action="close-editor">Cancel</button><button type="submit" class="button primary">${icon('check', 18)} Save song</button></div>
     </form>
   </dialog>
@@ -131,6 +138,7 @@ $('#app').innerHTML = `
     <div class="help-step"><span>02</span><div><h3>Let your piano do the talking</h3><p>Enable your microphone and allow access. Play one note clearly, close to the microphone, without the sustain pedal. Cadence waits until it hears the right pitch. Release repeated notes between strikes.</p></div></div>
     <div class="help-step"><span>03</span><div><h3>Small sections, as often as you like</h3><p>Listen to the demo, adjust its tempo, or loop a few steps. Practice is pitch-based, not a rhythm or fingering assessment. Rests play in the demo and are skipped in wait-for-note practice.</p></div></div>
     <div class="help-step"><span>04</span><div><h3>Make space for your songs</h3><p>Add a YouTube reference, enter notes, or import a MIDI file you can use. Choose its melody track; simultaneous chords become the highest note and overlapping notes are shortened. It is a practice simplification, not an automatic arrangement.</p></div></div>
+    <div class="help-step"><span>05</span><div><h3>Choose how you learn</h3><p>Switch between Video lesson and Guided notes on the music stand. Load a video only when you want to connect to YouTube. Slow it down with the available speeds, mark the start and end in seconds, and enable a section loop. Video playback never listens to your microphone or earns pitch scores. Guided mode needs piano notes for the selected song.</p></div></div>
     <div class="help-callout"><strong>A note about listening</strong><p>Microphone detection is experimental and monophonic, roughly A1-A6; middle-register notes work best. Background music, chords, headphones with processing, and sustain can confuse it. Use a quiet room and Chrome or Edge over HTTPS. All microphone processing stays on this device.</p><p>No piano nearby? Click the keys or use the letters shown below them. During demo playback, input and progress tracking pause.</p></div>
     <p class="muted">Progress is saved to this browser, not an account. Clearing site data removes it. Export a backup from My progress. This app isn't affiliated with Simply Piano or the linked artists.</p>
     <button class="button primary full-width" data-action="close-help">Let's make some music ${icon('arrow', 18)}</button>
@@ -140,6 +148,8 @@ $('#app').innerHTML = `
 `;
 
 function render() {
+  videoLesson?.destroy();
+  videoLesson = null;
   document.querySelectorAll('[data-view]').forEach((el) => {
     const active = /** @type {HTMLElement} */ (el).dataset.view === view;
     el.classList.toggle('active', active);
@@ -165,8 +175,9 @@ function renderPractice() {
     <div class="practice-layout">
       <div class="studio-column">
         <section class="studio-card">
-          <div class="studio-heading"><div class="song-heading-icon">${icon('music', 23)}</div><div class="song-heading-copy"><div class="eyebrow">ON THE MUSIC STAND</div><h2>${esc(song.title)}</h2><div class="song-meta">${hasNotes ? '<span class="badge mint">Single-note practice</span><span>' + song.notes.filter((n) => n.midi !== null).length + ' notes</span>' : '<span class="badge amber">Needs an arrangement</span>'}<span>${esc(song.source)}</span></div></div><button class="icon-button" data-action="edit" aria-label="${isBuiltin() ? 'Make an editable copy' : 'Edit this song'}">${icon('edit', 18)}</button></div>
-          ${hasNotes ? `
+          <div class="studio-heading"><div class="song-heading-icon">${icon('music', 23)}</div><div class="song-heading-copy"><div class="eyebrow">ON THE MUSIC STAND</div><h2>${esc(song.title)}</h2><div class="song-meta">${hasNotes ? '<span class="badge mint">Guided notes ready</span><span>' + song.notes.filter((n) => n.midi !== null).length + ' notes</span>' : '<span class="badge amber">Guided notes need an arrangement</span>'}${videoUrl(song) ? '<span class="badge mint">Video linked</span>' : ''}<span>${esc(song.source)}</span></div></div><button class="icon-button" data-action="edit" aria-label="${isBuiltin() ? 'Make an editable copy' : 'Edit this song'}">${icon('edit', 18)}</button></div>
+          <div class="lesson-switch" role="group" aria-label="Lesson mode"><button data-lesson-mode="video" aria-pressed="${lessonMode === 'video'}">${icon('play', 17)}<span>Video lesson<small>Watch, slow down, repeat</small></span></button><button data-lesson-mode="guided" aria-pressed="${lessonMode === 'guided'}">${icon('piano', 18)}<span>Guided notes<small>Wait for the correct note</small></span></button></div>
+          ${lessonMode === 'video' ? videoMarkup(song) : hasNotes ? `
           <div class="score-toolbar"><span class="waiting-tag"><span></span> <span id="practice-mode">Wait-for-note mode</span></span><label class="toggle-label"><input id="show-labels" type="checkbox" ${labels ? 'checked' : ''} /> Note names</label></div>
           <div id="score-container" class="score-container"></div>
           <div class="phrase-progress"><div class="progress-track"><div id="phrase-fill"></div></div><span id="phrase-count"></span></div>
@@ -177,10 +188,10 @@ function renderPractice() {
           <div class="transport"><button class="button primary mic-button" data-action="mic" id="mic-button">${icon('mic', 18)} Enable microphone</button><button class="button secondary" data-action="demo" id="demo-button">${icon('play', 17)} Listen to demo</button><button class="icon-button restart-button" data-action="restart" aria-label="Restart this practice">${icon('restart', 19)}</button></div>
           <div class="input-status"><span class="input-dot" id="input-dot"></span><span id="input-label">Microphone off</span><span class="input-meter" id="input-meter"><i></i></span><span class="heard" id="heard">Audio stays on your device</span></div>
           ` : `
-          <div class="arrangement-empty"><div class="empty-icon">${icon('music', 42)}</div><span class="badge amber">A LITTLE PREPARATION, THEN MUSIC</span><h3>Your inspiration is here.<br>Let's give it some notes.</h3><p>A YouTube link can't tell the trainer which piano keys to expect. Add a MIDI melody or enter an arrangement you have permission to use.</p><button class="button primary" data-action="edit">${icon('plus', 18)} Add an arrangement</button>${song.reference ? `<a class="reference-link" href="${esc(song.reference)}" target="_blank" rel="noopener noreferrer">Watch your YouTube reference ${icon('external', 15)}</a>` : ''}<button class="text-button" data-song="first-light">Try an original exercise instead ${icon('arrow', 16)}</button></div>
+          <div class="arrangement-empty"><div class="empty-icon">${icon('music', 42)}</div><span class="badge amber">GUIDED NOTES ARE NOT READY YET</span><h3>To wait for your notes,<br>we need the arrangement.</h3><p>The video does not supply a reliable note sequence. Import a MIDI melody or enter notes you have permission to use. We will never fill this song with a different melody.</p><button class="button primary" data-action="edit">${icon('plus', 18)} Add an arrangement</button>${videoUrl(song) ? `<button class="reference-link text-button" data-lesson-mode="video">Learn this song with the video ${icon('arrow', 16)}</button>` : ''}<p class="arrangement-hint">Once notes are added, you can switch between both modes for this same song.</p></div>
           `}
         </section>
-        ${hasNotes ? `<section class="practice-settings"><div class="tempo-setting"><div class="setting-title">${icon('clock', 18)}<label for="tempo">Playback tempo</label><strong id="tempo-value">${tempo} <small>BPM</small></strong></div><div class="range-row"><span>Slower</span><input id="tempo" type="range" min="30" max="240" value="${tempo}" /><span>Faster</span></div><p>Demo speed changes. Practice always waits for you.</p></div><div class="loop-setting"><div class="setting-title">${icon('loop', 19)}<label for="loop-enabled">Loop a section</label><input id="loop-enabled" type="checkbox" ${practice.loop ? 'checked' : ''} /></div><div class="loop-fields"><label for="loop-start">From step</label><input id="loop-start" type="number" min="1" max="${song.notes.length}" value="${practice.start + 1}" /><span>to</span><input id="loop-end" aria-label="Loop end step" type="number" min="1" max="${song.notes.length}" value="${practice.end + 1}" /></div><p>Repeat the tricky parts. There's no rush.</p><p class="form-error" id="loop-error" role="alert" hidden></p></div></section>` : ''}
+        ${hasNotes && lessonMode === 'guided' ? `<section class="practice-settings"><div class="tempo-setting"><div class="setting-title">${icon('clock', 18)}<label for="tempo">Playback tempo</label><strong id="tempo-value">${tempo} <small>BPM</small></strong></div><div class="range-row"><span>Slower</span><input id="tempo" type="range" min="30" max="240" value="${tempo}" /><span>Faster</span></div><p>Demo speed changes. Practice always waits for you.</p></div><div class="loop-setting"><div class="setting-title">${icon('loop', 19)}<label for="loop-enabled">Loop a section</label><input id="loop-enabled" type="checkbox" ${practice.loop ? 'checked' : ''} /></div><div class="loop-fields"><label for="loop-start">From step</label><input id="loop-start" type="number" min="1" max="${song.notes.length}" value="${practice.start + 1}" /><span>to</span><input id="loop-end" aria-label="Loop end step" type="number" min="1" max="${song.notes.length}" value="${practice.end + 1}" /></div><p>Repeat the tricky parts. There's no rush.</p><p class="form-error" id="loop-error" role="alert" hidden></p></div></section>` : ''}
       </div>
       <aside class="practice-aside">
         <section class="library-preview"><div class="section-heading"><h3>Up on your stand</h3><button class="text-button" data-view="library" aria-label="View song library">${icon('arrow', 18)}</button></div><p class="section-subtitle">A melody for every little moment.</p><div class="song-list">${allSongs().slice(0, 5).map(songRow).join('')}</div><button class="add-song-button" data-action="add">${icon('plus', 17)} Make room for your music</button></section>
@@ -189,17 +200,22 @@ function renderPractice() {
         ${song.reference ? `<a class="reference-card" href="${esc(song.reference)}" target="_blank" rel="noopener noreferrer">${icon('external', 18)}<span>Open song reference<small>Opens YouTube in another tab</small></span></a>` : ''}
       </aside>
     </div>`;
-  if (hasNotes) { renderStage(); updateInput(); }
+  if (lessonMode === 'video' && videoUrl(song)) {
+    const key = `${song.id}:${videoUrl(song)}`;
+    const session = videoSessions.get(key) ?? newVideoSession();
+    videoSessions.set(key, session);
+    videoLesson = new VideoLesson($('#video-lesson'), videoUrl(song), session);
+  } else if (hasNotes && lessonMode === 'guided') { renderStage(); updateInput(); }
 }
 
 /** @param {import('./core.js').Song} item */
 function songRow(item) {
   const original = BUILTIN_SONGS.some((built) => built.id === item.id);
-  return `<button class="song-row${item.id === song.id ? ' selected' : ''}" data-song="${esc(item.id)}"><span class="song-art ${original ? `art-${BUILTIN_SONGS.findIndex((s) => s.id === item.id)}` : 'art-custom'}">${icon(item.notes.length ? 'music' : 'link', 21)}</span><span class="song-row-copy"><strong>${esc(item.title)}</strong><small>${item.notes.length ? original ? 'Original exercise' : 'Your arrangement' : 'Needs an arrangement'}</small></span>${item.id === song.id ? '<span class="playing-bars"><i></i><i></i><i></i></span>' : icon('play', 14)}</button>`;
+  return `<button class="song-row${item.id === song.id ? ' selected' : ''}" data-song="${esc(item.id)}"><span class="song-art ${original ? `art-${BUILTIN_SONGS.findIndex((s) => s.id === item.id)}` : 'art-custom'}">${icon(item.notes.length ? 'music' : 'play', 21)}</span><span class="song-row-copy"><strong>${esc(item.title)}</strong><small>${item.notes.length ? original ? 'Original exercise' : 'Your arrangement' : videoUrl(item) ? 'Video lesson available' : 'Needs an arrangement'}</small></span>${item.id === song.id ? '<span class="playing-bars"><i></i><i></i><i></i></span>' : icon('play', 14)}</button>`;
 }
 
 function renderStage() {
-  if (view !== 'practice' || !song.notes.length) return;
+  if (view !== 'practice' || lessonMode !== 'guided' || !song.notes.length) return;
   const index = demo ? demoIndex : practice.index;
   const target = index >= 0 ? song.notes[index]?.midi ?? null : null;
   if (target !== null && (target < base || target > base + 24)) base = Math.max(21, Math.min(84, Math.floor(target / 12) * 12));
@@ -235,7 +251,7 @@ function renderStage() {
 }
 
 function updateInput() {
-  if (view !== 'practice' || !song.notes.length) return;
+  if (view !== 'practice' || lessonMode !== 'guided' || !song.notes.length) return;
   const button = /** @type {HTMLButtonElement} */ ($('#mic-button'));
   button.innerHTML = icon(mic.running ? 'pause' : 'mic', 18) + (micPending ? ' Waiting for permission...' : mic.running ? ' Pause microphone' : ' Enable microphone');
   button.disabled = micPending || demo;
@@ -249,7 +265,7 @@ function updateInput() {
 }
 
 function renderLibrary() {
-  $('#page-content').innerHTML = `<section class="library-banner"><span class="library-banner-icon">${icon('book', 32)}</span><div><h2>A song library without limits on taste.</h2><p>Start with an original exercise, import MIDI, or keep a YouTube reference for later.</p></div><button class="button secondary" data-action="midi">${icon('cloud', 18)} Import MIDI</button></section><div class="library-tools"><h2>Your collection <span>${allSongs().length}</span></h2><input type="search" id="song-search" placeholder="Find a song..." aria-label="Search songs" value="${esc(search)}" /></div><div id="song-grid" class="song-grid"></div><div class="library-footnote">${icon('shield', 19)}<span>Your notes and files never leave your browser. YouTube links open externally; they aren't transcribed or downloaded.</span></div>`;
+  $('#page-content').innerHTML = `<section class="library-banner"><span class="library-banner-icon">${icon('book', 32)}</span><div><h2>A song library without limits on taste.</h2><p>Follow a piano video, practice guided notes, or switch between both for the same song.</p></div><button class="button secondary" data-action="midi">${icon('cloud', 18)} Import MIDI</button></section><div class="library-tools"><h2>Your collection <span>${allSongs().length}</span></h2><input type="search" id="song-search" placeholder="Find a song..." aria-label="Search songs" value="${esc(search)}" /></div><div id="song-grid" class="song-grid"></div><div class="library-footnote">${icon('shield', 19)}<span>Your notes and files stay in your browser. Video lessons connect to YouTube only after you choose to load the player. They aren't transcribed.</span></div>`;
   renderSongGrid();
 }
 function renderSongGrid() {
@@ -258,7 +274,7 @@ function renderSongGrid() {
     const built = BUILTIN_SONGS.findIndex((s) => s.id === item.id);
     const p = progress(item.id);
     const percent = item.notes.length ? Math.min(100, Math.round(p.furthest / item.notes.length * 100)) : 0;
-    return `<article class="library-song"><div class="song-cover ${built >= 0 ? `art-${built}` : 'art-custom'}"><span class="cover-lines"></span>${icon(item.notes.length ? 'music' : 'link', 50)}<span class="badge">${built >= 0 ? 'CADENCE ORIGINAL' : item.notes.length ? 'YOUR ARRANGEMENT' : 'YOUR INSPIRATION'}</span></div><div class="library-song-body"><div class="song-meta"><span class="badge ${item.notes.length ? 'mint' : 'amber'}">${item.notes.length ? 'Ready to practice' : 'Needs an arrangement'}</span>${p.completed ? `<span>${icon('check', 14)} Played through</span>` : ''}</div><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><div class="library-song-progress"><span>${item.notes.length ? `${item.notes.filter((n) => n.midi !== null).length} notes` : 'YouTube reference'}</span><span>${item.notes.length ? `${percent}% explored` : 'No notes added yet'}</span></div><div class="progress-track"><div style="width:${percent}%"></div></div><button class="button ${item.notes.length ? 'secondary' : 'reference-button'} full-width" data-song="${esc(item.id)}">${item.notes.length ? 'Let\'s practice' : 'Open song'}${icon('arrow', 17)}</button></div></article>`;
+    return `<article class="library-song"><div class="song-cover ${built >= 0 ? `art-${built}` : 'art-custom'}"><span class="cover-lines"></span>${icon(item.notes.length ? 'music' : 'play', 50)}<span class="badge">${built >= 0 ? 'CADENCE ORIGINAL' : item.notes.length ? 'YOUR ARRANGEMENT' : 'YOUR INSPIRATION'}</span></div><div class="library-song-body"><div class="song-meta"><span class="badge ${item.notes.length || videoUrl(item) ? 'mint' : 'amber'}">${item.notes.length ? 'Guided notes ready' : videoUrl(item) ? 'Video lesson available' : 'Needs an arrangement'}</span>${item.notes.length && videoUrl(item) ? '<span class="badge mint">Video linked</span>' : ''}${p.completed ? `<span>${icon('check', 14)} Played through</span>` : ''}</div><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><div class="library-song-progress"><span>${item.notes.length ? `${item.notes.filter((n) => n.midi !== null).length} notes` : 'Learn with the video'}</span><span>${item.notes.length ? `${percent}% explored` : 'Guided notes not added'}</span></div><div class="progress-track"><div style="width:${percent}%"></div></div><button class="button ${item.notes.length ? 'secondary' : 'reference-button'} full-width" data-song="${esc(item.id)}">${item.notes.length ? 'Let\'s practice' : 'Open song'}${icon('arrow', 17)}</button></div></article>`;
   }).join('') : '<div class="search-empty">No songs match that search. Try another title.</div>';
 }
 
@@ -284,6 +300,7 @@ function changeView(next) {
 function selectSong(id) {
   stopAll();
   song = findSong(id);
+  lessonMode = defaultLessonMode(song);
   data.selected = song.id;
   practice = new Practice(song.notes);
   tempo = song.bpm;
@@ -298,7 +315,7 @@ function selectSong(id) {
 
 /** @param {number} midi @param {'mic' | 'keyboard'} source */
 function playNote(midi, source) {
-  if (view !== 'practice' || !song.notes.length || demo || document.querySelector('dialog[open]')) return;
+  if (view !== 'practice' || lessonMode !== 'guided' || !song.notes.length || demo || document.querySelector('dialog[open]')) return;
   if (source === 'keyboard') {
     void sound(midi);
     manualUntil = performance.now() + 30000;
@@ -386,6 +403,7 @@ function stopDemo() {
   demoIndex = -1;
 }
 function stopAll() {
+  videoLesson?.unload();
   stopDemo();
   micRequest++;
   mic.stop();
@@ -459,6 +477,7 @@ function openEditor(item) {
   /** @type {HTMLInputElement} */ ($('#song-bpm')).value = String(item?.bpm ?? 72);
   /** @type {HTMLTextAreaElement} */ ($('#song-notes')).value = item ? formatNotes(item.notes) : '';
   /** @type {HTMLInputElement} */ ($('#song-reference')).value = item?.reference ?? '';
+  /** @type {HTMLInputElement} */ ($('#song-tutorial')).value = item?.tutorial ?? '';
   const oldDelete = document.querySelector('#delete-song');
   oldDelete?.remove();
   if (editingId) $('#editor .modal-actions').insertAdjacentHTML('afterbegin', `<button type="button" class="text-button danger" id="delete-song" data-action="delete">${icon('trash', 16)} Delete</button>`);
@@ -498,9 +517,10 @@ $('#song-form').addEventListener('submit', (event) => {
       notes,
       description: previous?.description ?? (notes.length ? 'Your own little piece of music. Learn it one note at a time.' : 'Saved inspiration. Add a piano arrangement when you are ready.'),
       reference: /** @type {HTMLInputElement} */ ($('#song-reference')).value,
+      tutorial: /** @type {HTMLInputElement} */ ($('#song-tutorial')).value,
       source: notes.length ? 'Your arrangement' : 'Your reference'
     });
-    if (!notes.length && !item.reference) throw new Error('Add some piano notes or a YouTube reference to save this song.');
+    if (!notes.length && !videoUrl(item)) throw new Error('Add some piano notes, a piano tutorial, or a YouTube reference to save this song.');
     if (previous && JSON.stringify(previous.notes) !== JSON.stringify(item.notes) && data.progress[previous.id]) {
       if (!confirm('Changing the arrangement resets this song\'s practice history. Save the new notes?')) return;
       delete data.progress[previous.id];
@@ -508,7 +528,7 @@ $('#song-form').addEventListener('submit', (event) => {
     data.songs = [...data.songs.filter((s) => s.id !== item.id), item];
     /** @type {HTMLDialogElement} */ ($('#editor')).close();
     selectSong(item.id);
-    notice(item.notes.length ? 'Your song is ready. Let\'s take it one note at a time.' : 'Reference saved. Add an arrangement whenever you\'re ready.');
+    notice(item.notes.length ? 'Guided notes are ready. Switch learning modes any time.' : 'Video link saved. Guided notes will be available once you add an arrangement.');
   } catch (error) { editorError(message(error)); }
 });
 
@@ -555,6 +575,14 @@ document.addEventListener('click', (event) => {
   if (target.matches('a.brand')) { event.preventDefault(); changeView('practice'); return; }
   if (target.dataset.view) { changeView(target.dataset.view); return; }
   if (target.dataset.song) { selectSong(target.dataset.song); return; }
+  if (target.dataset.lessonMode === 'video' || target.dataset.lessonMode === 'guided') {
+    stopAll();
+    lessonMode = target.dataset.lessonMode;
+    persist();
+    render();
+    /** @type {HTMLButtonElement} */ ($(`.lesson-switch [data-lesson-mode="${lessonMode}"]`)).focus({ preventScroll: true });
+    return;
+  }
   if (target.dataset.midi) { playNote(Number(target.dataset.midi), 'keyboard'); return; }
   const action = target.dataset.action;
   if (action === 'add') openEditor();
@@ -618,7 +646,7 @@ document.addEventListener('keydown', (event) => {
     }
     return;
   }
-  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || view !== 'practice' || document.querySelector('dialog[open]')) return;
+  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || view !== 'practice' || lessonMode !== 'guided' || document.querySelector('dialog[open]')) return;
   if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
   const offset = COMPUTER_KEYS.indexOf(event.key.toLowerCase());
   if (offset < 0 || base + offset > 108) return;
@@ -630,7 +658,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => { stopAll(); persist(); });
 window.setInterval(() => {
-  if (view !== 'practice' || demo || practice.finished || document.hidden || document.querySelector('dialog[open]')) return;
+  if (view !== 'practice' || lessonMode !== 'guided' || demo || practice.finished || document.hidden || document.querySelector('dialog[open]')) return;
   if (!mic.running && performance.now() > manualUntil) return;
   const p = progress();
   p.seconds++;

@@ -1,5 +1,5 @@
 /** @typedef {{ midi: number | null, beats: number }} Step */
-/** @typedef {{ id: string, title: string, description: string, bpm: number, notes: Step[], reference: string, source: string }} Song */
+/** @typedef {{ id: string, title: string, description: string, bpm: number, notes: Step[], reference: string, tutorial?: string, source: string }} Song */
 /** @typedef {{ correct: number, attempts: number, completed: number, furthest: number, seconds: number, lastPlayed: string }} Progress */
 
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -81,9 +81,14 @@ export function validateSong(value) {
   });
   if (notes.length && !notes.some((n) => n.midi !== null)) throw new Error('Add at least one piano note, not only rests.');
   if (typeof s.reference !== 'string' || s.reference.length > 2048) throw new Error('Invalid reference link.');
+  if (s.tutorial !== undefined && (typeof s.tutorial !== 'string' || s.tutorial.length > 2048)) throw new Error('Invalid piano tutorial link.');
   if (typeof s.description !== 'string' || s.description.length > 240) throw new Error('Keep the description under 240 characters.');
   if (typeof s.source !== 'string' || s.source.length > 120) throw new Error('Invalid song source.');
-  return { id: s.id, title: s.title.trim(), description: s.description.trim(), bpm: s.bpm, notes, reference: referenceUrl(s.reference), source: s.source };
+  return {
+    id: s.id, title: s.title.trim(), description: s.description.trim(), bpm: s.bpm, notes,
+    reference: referenceUrl(s.reference), source: s.source,
+    ...(typeof s.tutorial === 'string' ? { tutorial: referenceUrl(s.tutorial) } : {})
+  };
 }
 
 export function emptyProgress() {

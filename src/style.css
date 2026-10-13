@@ -78,6 +78,40 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; letter-sp
 .icon-button:hover:not(:disabled) { background: #edf3ee; color: var(--green); }
 .full-width { width: 100%; }
 .muted { color: var(--muted); font-size: 12px; line-height: 1.8; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.lesson-switch { display: flex; gap: 6px; padding: 5px; margin: 20px 0 7px; border: 1px solid var(--border); border-radius: 9px; background: #f7f9f6; }
+.lesson-switch button { flex: 1; display: flex; align-items: center; justify-content: center; text-align: left; gap: 9px; padding: 12px 8px; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #697a6c; font-size: 12px; font-weight: 600; }
+.lesson-switch button small { display: block; margin-top: 4px; font-size: 9px; font-weight: 400; }
+.lesson-switch button[aria-pressed="true"] { background: #fff; border-color: #dce9de; color: var(--green); box-shadow: 0 2px 5px #294e3810; }
+.video-lesson { padding-bottom: 25px; }
+.video-intro { padding: 20px 0 15px; }
+.video-intro h3 { font-family: Georgia, serif; font-size: 23px; font-weight: 400; margin-bottom: 8px; }
+.video-intro p { font-size: 11px; color: #728470; line-height: 1.8; margin: 0; }
+.video-consent { min-height: 270px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 26px; background: #edf3ed; border: 1px solid #dfE9dd; border-radius: 10px; text-align: center; }
+.video-play-mark { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%; background: #dcebdd; color: var(--green); margin-bottom: 17px; }
+.video-consent h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.video-consent p { font-size: 11px; color: #728470; line-height: 1.8; max-width: 370px; margin-bottom: 17px; }
+.video-mount { aspect-ratio: 16 / 9; min-height: 205px; background: #1c2b23; border-radius: 9px; overflow: hidden; }
+.video-mount iframe { display: block; width: 100%; height: 100%; min-height: 205px; border: 0; }
+.video-links { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 13px 0 20px; font-size: 10px; }
+.video-links a { display: flex; align-items: center; gap: 5px; text-decoration: none; }
+.video-links > span { color: #728470; font-variant-numeric: tabular-nums; }
+.video-controls { min-width: 0; border: 0; padding: 0; margin: 0; }
+.video-controls:disabled { opacity: .5; }
+.video-transport { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.video-transport label { font-size: 11px; color: #60745e; margin-left: auto; }
+.video-transport select { color: #385c3f; border: 1px solid #dce6d8; border-radius: 6px; padding: 9px; background: #fff; }
+.video-transport .text-button { font-size: 10px; }
+.video-loop-settings { border: 1px solid #e1e9dc; border-radius: 8px; margin: 20px 0 0; padding: 15px; min-width: 0; }
+.video-loop-settings legend { font-size: 12px; font-weight: 600; color: #577250; padding: 0 7px; }
+.video-loop-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.video-loop-fields label { display: block; font-size: 10px; color: #65785e; margin-bottom: 7px; }
+.video-loop-fields input { width: 100%; border: 1px solid #dce5d5; border-radius: 6px; padding: 10px; background: #fcfdfa; color: #3f5b38; font-size: 12px; }
+.video-loop-fields .text-button { font-size: 9px; margin-top: 3px; }
+.video-loop-toggle { display: flex; align-items: center; gap: 7px; margin-top: 15px; font-size: 11px; color: #617657; }
+.video-status { font-size: 10px; line-height: 1.8; color: #698060; padding-top: 12px; margin: 0; }
+.arrangement-empty .reference-link { margin: 20px auto; }
+.arrangement-empty .arrangement-hint { font-size: 10px; margin-top: 24px; }
 
 .practice-layout { display: grid; grid-template-columns: minmax(0, 1fr) 274px; gap: 25px; align-items: start; }
 .studio-column { min-width: 0; }
@@ -391,6 +425,12 @@ footer > span:last-child { display: flex; gap: 7px; align-items: center; }
   .backup-actions { flex-direction: row; gap: 20px; }
 }
 @media (max-width: 480px) {
+  .lesson-switch button { font-size: 11px; gap: 6px; padding: 11px 4px; }
+  .lesson-switch button small { font-size: 8px; }
+  .video-consent { padding: 22px 15px; }
+  .video-transport { gap: 8px; }
+  .video-transport .text-button { width: 100%; }
+  .video-loop-fields { gap: 13px; }
   .main-content { padding: 24px 14px 0; }
   .sidebar { padding: 15px 14px 0; }
   .topbar { padding: 0 14px; }

@@ -2,7 +2,7 @@
 
 **Your piano. Your pace.** A free, open-source, browser-only piano practice studio.
 
-Cadence is a working beginner trainer, not a clone of Simply Piano and not an automatic YouTube transcription service. There are no accounts, subscriptions, API keys, runtime third-party dependencies, or backend services.
+Cadence is a working beginner trainer, not a clone of Simply Piano and not an automatic YouTube transcription service. There are no Cadence accounts, subscriptions, API keys, or backend services. Guided practice is entirely local; optional video lessons use YouTube's embedded player.
 
 Repository: [vpallati/VishnuSimplyPiano](https://github.com/vpallati/VishnuSimplyPiano)
 
@@ -30,6 +30,8 @@ Do not double-click the HTML file: ES modules and microphone access need a local
 - Synthesized note previews and demo playback at 30-240 BPM.
 - Loops over an inclusive range of numbered steps, including notes and rests.
 - A personal library with a note editor, YouTube reference links, and MIDI track import.
+- Switchable **Video lesson** and **Guided notes** modes for each song.
+- Opt-in YouTube playback, supported speed choices, and section loops defined in seconds.
 - Correct-note counts, pitch accuracy, full play-throughs, and active practice time.
 - Browser-local persistence, JSON backup export/restore, and responsive desktop/mobile layouts.
 
@@ -39,16 +41,29 @@ Demo playback never increases progress. Wrong pitches count as attempts but do n
 
 **Yogeshwaraya Mahadevaya**, by Sadhguru and Sounds of Isha, is included as a reference to [the video you provided](https://www.youtube.com/watch?v=iUrjWDnyFCM).
 
-It is explicitly marked **Needs an arrangement**. No audio is downloaded, and no unverified or copyrighted transcription is bundled.
+It also includes [Aditya Lankoti's piano cover and tutorial](https://www.youtube.com/watch?v=hPUseuixiTM) as an optional video lesson. Open the song, select **Video lesson**, and choose **Load video lesson**. The original recording remains a separate reference.
 
-To turn any reference into a playable lesson:
+**Guided notes still need an arrangement for this song.** The tutorial is not automatically transcribed, and no unverified notes or copyrighted arrangement are bundled. Switching modes never substitutes an exercise for your song.
+
+To enable correct-note tracking for this song:
 
 1. Obtain a single-note MIDI melody you have permission to use, or prepare your own permitted arrangement.
 2. Open the reference and choose **Add an arrangement**.
 3. Import the MIDI and choose its melody track, or enter the notes.
 4. Save, listen to the demo, and start practicing.
 
-A YouTube link contains neither a reliable note sequence nor fingering. Separating a full recording into instruments and making a suitable beginner arrangement is outside this version. The app does **not** promise that pasting a link will produce a lesson.
+A YouTube link contains neither a reliable note sequence nor fingering. Separating a full recording into instruments and making a suitable beginner arrangement is outside this version. The app does **not** promise that pasting a link will produce a guided note arrangement.
+
+### Switching between learning modes
+
+- **Video lesson:** watch the teacher's hands, pause, and try a phrase on your piano. Choose **Load video lesson** to connect to YouTube, then press Play. Use the speed choices supported by that video. Enter start and end times in seconds (or use **Use current time**), then enable **Loop this section**. A loop must be at least half a second and within the video's duration. Repeats are best-effort, not sample-accurate.
+- **Guided notes:** Cadence waits for the correct pitch and octave, using your song's entered or imported notes. This mode remains explicit about missing arrangements.
+- A song with no notes opens in video mode when a link is available. Existing arrangements open in guided mode. Both mode buttons are always available.
+- Add or change a **Piano tutorial video** in the song editor. The player uses the tutorial first, falling back to the original reference if none is supplied.
+- Switching modes stops playback and microphone capture. Guided position and video position/loop/speed survive switching modes while the app remains open. Video settings are session-only; they are not stored in backups.
+- Video playback never earns pitch scores, correct-note counts, completions, or guided practice time. No microphone is opened in video mode.
+- Some creators block embedding; browser blockers, age/region restrictions, and network issues can also prevent playback. Errors are shown with an **Open on YouTube** link. Cadence does not bypass those restrictions.
+- Existing version-one libraries receive the example tutorial link without losing notes or progress. Edited links, deliberately removed tutorials, and deleted songs are respected.
 
 ### Entering notes
 
@@ -103,8 +118,9 @@ Songs and progress live in `localStorage`, under the `cadence.piano.v1` key. The
 - **Restore backup** validates the JSON, then asks before replacing the current library and history.
 - If storage is blocked, full, or corrupt, a warning is shown. Practice can continue in memory, but export a backup before leaving.
 - Invalid existing storage is not silently overwritten.
-- YouTube references open YouTube externally. Nothing is embedded or contacted on page load.
-- There are no analytics, external fonts, paid APIs, or server-side storage.
+- No YouTube content or third-party script is fetched on initial page load or simply selecting video mode. Choosing **Load video lesson** loads the YouTube IFrame API and its privacy-enhanced (`youtube-nocookie.com`) player. YouTube/Google may then receive device data and use cookies; this is not an offline/private video service.
+- External reference links open YouTube in another tab. Neither video mode nor guided mode downloads or transcribes the recording.
+- Cadence itself has no analytics, external fonts, paid APIs, or server-side storage. The optional third-party player has its own privacy practices.
 
 ## Deploy free on GitHub Pages
 
@@ -140,6 +156,7 @@ npm run preview
 - [src/core.js](src/core.js): notes, pitch detection, note gating, and practice state.
 - [src/midi.js](src/midi.js): bounded Standard MIDI parsing and melody extraction.
 - [src/audio.js](src/audio.js): browser audio and microphone lifecycle.
+- [src/video.js](src/video.js): opt-in YouTube player, playback lifecycle, and timed section loops.
 - [src/storage.js](src/storage.js): versioned storage and validated backups.
 - [src/main.js](src/main.js): interface and interaction.
 - [src/visuals.js](src/visuals.js): notation, keyboard, and icons.

@@ -35,9 +35,10 @@ export const BUILTIN_SONGS = [
 export const EXAMPLE_REFERENCE = {
   id: 'yogeshwaraya-reference',
   title: 'Yogeshwaraya Mahadevaya',
-  description: 'Your inspiration, by Sadhguru and Sounds of Isha. Add a MIDI arrangement or enter notes to start practicing.',
+  description: 'Learn with Aditya Lankoti\'s piano tutorial. For microphone-guided practice, add a MIDI arrangement or enter notes.',
   bpm: 72,
   notes: [],
   reference: 'https://www.youtube.com/watch?v=iUrjWDnyFCM',
+  tutorial: 'https://www.youtube.com/watch?v=hPUseuixiTM',
   source: 'YouTube reference'
 };

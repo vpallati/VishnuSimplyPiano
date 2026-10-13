@@ -40,3 +40,36 @@ test('unavailable or corrupt storage is surfaced, not overwritten', () => {
   assert.throws(() => loadData(corrupt));
   assert.equal(writes, 0);
 });
+
+test('existing libraries receive the example tutorial without losing songs or practice history', () => {
+  const data = freshData();
+  delete data.songs[0].tutorial;
+  data.songs[0].description = 'My own practice plan';
+  data.songs[0].notes = [{ midi: 60, beats: 1 }];
+  data.progress[data.songs[0].id] = { ...emptyProgress(), correct: 2, attempts: 3 };
+  const migrated = validateData(data);
+  assert.match(migrated.songs[0].tutorial, /hPUseuixiTM/);
+  assert.equal(migrated.songs[0].description, 'My own practice plan');
+  assert.deepEqual(migrated.songs[0].notes, data.songs[0].notes);
+  assert.deepEqual(migrated.progress, data.progress);
+  assert.equal(data.songs[0].tutorial, undefined);
+});
+
+test('tutorial migration respects edited links, deliberate removal, and deleted songs', () => {
+  for (const tutorial of ['', 'https://www.youtube.com/watch?v=iUrjWDnyFCM']) {
+    const data = freshData();
+    data.songs[0].tutorial = tutorial;
+    assert.equal(validateData(data).songs[0].tutorial, tutorial);
+  }
+  const changed = freshData();
+  delete changed.songs[0].tutorial;
+  changed.songs[0].reference = 'https://www.youtube.com/watch?v=hPUseuixiTM';
+  assert.equal(validateData(changed).songs[0].tutorial, undefined);
+  assert.deepEqual(validateData({ ...freshData(), songs: [] }).songs, []);
+});
+
+test('tutorial links round-trip through the version-one backup format', () => {
+  const data = freshData();
+  const restored = validateData(JSON.parse(JSON.stringify(data)));
+  assert.deepEqual(restored, data);
+});
